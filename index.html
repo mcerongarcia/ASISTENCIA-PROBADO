@@ -13,40 +13,29 @@ body {
   font-family: Arial;
   margin: 0;
   background: #f1f5f9;
-  transition: 0.3s;
 }
 
 .header {
   background: linear-gradient(90deg, #1e3a8a, #1d4ed8);
   color: white;
   text-align: center;
-  padding: 12px;
+  padding: 10px;
 }
 
 .logo {
   width: 60px;
-  display: block;
-  margin: 0 auto 5px;
-}
-
-.nombre-liceo {
-  font-size: 17px;
-  font-weight: bold;
-}
-
-.sistema {
-  font-size: 13px;
+  margin: 0 auto;
 }
 
 .botones {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
 }
 
 .botones button {
-  padding: 14px;
+  padding: 12px;
   border-radius: 10px;
   border: none;
   background: #e2e8f0;
@@ -60,104 +49,88 @@ body {
 
 #reader {
   width: 100%;
-  max-width: 380px;
-  margin: 10px auto;
-  border-radius: 15px;
+  max-width: 320px;
+  margin: auto;
   border: 3px solid #1e3a8a;
-  background: black;
 }
 
 #mensaje {
   text-align: center;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: bold;
-  margin-top: 10px;
   padding: 10px;
 }
 
-.verde {
-  background: #16a34a !important;
-  color: white;
-}
-
-.rojo {
-  background: #dc2626 !important;
-  color: white;
-}
+.verde { background: #16a34a; color: white; }
+.rojo { background: #dc2626; color: white; }
 </style>
-
 </head>
 
 <body>
 
 <div class="header">
 <img src="./logo.png.png" class="logo">
-<div class="nombre-liceo">Liceo Luis Urbina Flores</div>
-<div class="sistema">Sistema de Control de Asistencia</div>
+<div>Liceo Luis Urbina Flores</div>
 </div>
 
 <div class="botones">
 <button onclick="setModo('entrada')" id="btnEntrada" class="activo">Entrada</button>
 <button onclick="setModo('atraso')" id="btnAtraso">Atraso</button>
 <button onclick="setModo('almuerzo')" id="btnAlmuerzo">Almuerzo</button>
-<button onclick="setModo('convivencia')" id="btnConvivencia">Convivencia Escolar</button>
-<button onclick="setModo('inspectoria')" id="btnInspectoria">Inspectoría General</button>
+<button onclick="setModo('inspectoria')" id="btnInspectoria">Inspectoría</button>
 </div>
 
 <div id="reader"></div>
-<div id="mensaje">Toca la pantalla y escanea</div>
+<div id="mensaje">Toca pantalla y escanea</div>
 
 <script>
 
-// 🔊 ACTIVAR AUDIO EN CELULAR
-document.addEventListener("click", () => {
-  beep(0, 0, 0);
-}, { once: true });
+// 🔊 AUDIO GLOBAL (FUNCIONA EN CELULAR)
+let audioCtx;
 
+document.addEventListener("click", () => {
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if(audioCtx.state === "suspended"){
+    audioCtx.resume();
+  }
+}, { once:true });
+
+function beep(freq=800){
+  if(!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.frequency.value = freq;
+  gain.gain.value = 0.3;
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.15);
+}
+
+// VARIABLES
 let modo = "entrada";
 let bloqueado = false;
 let ultimoQR = "";
 
-// 🔊 SONIDO MEJORADO
-function beep(freq = 800, duration = 150, volume = 0.3){
-  try{
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.frequency.value = freq;
-    gain.gain.value = volume;
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start();
-    osc.stop(ctx.currentTime + duration / 1000);
-  } catch(e){
-    console.log("audio bloqueado");
-  }
-}
-
-// 🔁 CAMBIAR MODO
+// CAMBIAR MODO
 function setModo(nuevo){
   modo = nuevo;
   document.querySelectorAll("button").forEach(b=>b.classList.remove("activo"));
-  document.getElementById("btn"+capitalize(nuevo)).classList.add("activo");
+  document.getElementById("btn"+nuevo.charAt(0).toUpperCase()+nuevo.slice(1)).classList.add("activo");
 }
 
-function capitalize(t){
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
+// 🔗 URL
+const URL_SCRIPT = "PEGA_AQUI_TU_URL";
 
-// 🔗 PEGA TU URL AQUÍ
-const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbyfAcOaDVArFHj8mZR46olJqBLEDLpEyJJnuCwd8pjIcdp1Grx0vxoh9x4bRobHYm8btA/exec";
-
-// 📲 ESCANEO
+// ESCANEO
 function onScanSuccess(texto){
 
-// 🚫 IGNORA MISMO QR CONTINUO
 if(texto === ultimoQR) return;
-
 ultimoQR = texto;
 
 if(bloqueado) return;
@@ -165,60 +138,52 @@ bloqueado = true;
 
 let mensaje = document.getElementById("mensaje");
 let datos = texto.split("|");
-let rut = (datos.length >= 5) ? datos[4] : texto;
+let rut = datos.length >=5 ? datos[4] : texto;
 
 fetch(URL_SCRIPT,{
   method:"POST",
   body: JSON.stringify({
-    rut: rut,
-    tipo: modo,
-    hora: new Date().toLocaleTimeString(),
-    fecha: new Date().toLocaleDateString()
+    rut:rut,
+    tipo:modo,
+    hora:new Date().toLocaleTimeString(),
+    fecha:new Date().toLocaleDateString()
   })
 })
-.then(res => res.text())
-.then(respuesta => {
+.then(r=>r.text())
+.then(res=>{
 
-  if(respuesta.includes("ERROR")){
-    document.body.classList.remove("verde");
-    document.body.classList.add("rojo");
-    mensaje.innerText = "❌ RUT NO REGISTRADO";
-    beep(200, 300, 0.4);
-  } else {
-    document.body.classList.remove("rojo");
-    document.body.classList.add("verde");
-    mensaje.innerText = "✔ REGISTRADO";
-    beep(800, 150, 0.3);
+  if(res.includes("ERROR")){
+    document.body.className="rojo";
+    mensaje.innerText="❌ NO REGISTRADO";
+    beep(200);
+  }else{
+    document.body.className="verde";
+    mensaje.innerText="✔ REGISTRADO";
+    beep(900);
   }
 
 })
-.catch(() => {
-  mensaje.innerText = "⚠ ERROR DE CONEXIÓN";
+.catch(()=>{
+  mensaje.innerText="⚠ ERROR";
 });
 
-// 🔄 RESET VISUAL
+// reset rápido
 setTimeout(()=>{
-  bloqueado = false;
-  mensaje.innerText = "Esperando escaneo...";
-  document.body.classList.remove("verde","rojo");
-},2000);
-
+  bloqueado=false;
+  mensaje.innerText="Escanea siguiente";
+  document.body.className="";
+},1500);
 }
 
-// 🔄 LIBERA QR SI SIGUE EN PANTALLA
-setInterval(()=>{
-  ultimoQR = "";
-}, 3000);
+// limpiar QR
+setInterval(()=>{ ultimoQR=""; },2000);
 
-// 📷 CAMARA
+// CAMARA (OPTIMIZADA 🚀)
 const qr = new Html5Qrcode("reader");
 
 qr.start(
-  {facingMode:"environment"},
-  {
-    fps:6, // 🔥 más rápido y estable
-    qrbox:250
-  },
+  { facingMode:"environment" },
+  { fps:10, qrbox:220 }, // 🔥 MÁS RÁPIDO
   onScanSuccess
 );
 
