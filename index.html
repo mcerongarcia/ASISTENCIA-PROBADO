@@ -105,27 +105,37 @@ body {
 </div>
 
 <div id="reader"></div>
-<div id="mensaje">Esperando escaneo...</div>
+<div id="mensaje">Toca la pantalla y escanea</div>
 
 <script>
 
+// 🔊 ACTIVAR AUDIO EN CELULAR
+document.addEventListener("click", () => {
+  beep(0, 0, 0);
+}, { once: true });
+
 let modo = "entrada";
 let bloqueado = false;
+let ultimoQR = "";
 
-// 🔊 SONIDO SEGURO
+// 🔊 SONIDO MEJORADO
 function beep(freq = 800, duration = 150, volume = 0.3){
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
-  osc.frequency.value = freq;
-  gain.gain.value = volume;
+    osc.frequency.value = freq;
+    gain.gain.value = volume;
 
-  osc.connect(gain);
-  gain.connect(ctx.destination);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
 
-  osc.start();
-  osc.stop(ctx.currentTime + duration / 1000);
+    osc.start();
+    osc.stop(ctx.currentTime + duration / 1000);
+  } catch(e){
+    console.log("audio bloqueado");
+  }
 }
 
 // 🔁 CAMBIAR MODO
@@ -139,74 +149,76 @@ function capitalize(t){
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
-// 🔗 URL SCRIPT
+// 🔗 PEGA TU URL AQUÍ
 const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbyfAcOaDVArFHj8mZR46olJqBLEDLpEyJJnuCwd8pjIcdp1Grx0vxoh9x4bRobHYm8btA/exec";
 
 // 📲 ESCANEO
 function onScanSuccess(texto){
 
- if(bloqueado) return;
- bloqueado = true;
+// 🚫 IGNORA MISMO QR CONTINUO
+if(texto === ultimoQR) return;
 
- let mensaje = document.getElementById("mensaje");
- let datos = texto.split("|");
+ultimoQR = texto;
 
- let rut = (datos.length >= 5) ? datos[4] : texto;
+if(bloqueado) return;
+bloqueado = true;
 
- fetch(URL_SCRIPT,{
-   method:"POST",
-   body: JSON.stringify({
-     rut: rut,
-     tipo: modo,
-     hora: new Date().toLocaleTimeString(),
-     fecha: new Date().toLocaleDateString()
-   })
- })
- .then(res => res.text())
- .then(respuesta => {
+let mensaje = document.getElementById("mensaje");
+let datos = texto.split("|");
+let rut = (datos.length >= 5) ? datos[4] : texto;
 
-   if(respuesta.includes("ERROR")){
+fetch(URL_SCRIPT,{
+  method:"POST",
+  body: JSON.stringify({
+    rut: rut,
+    tipo: modo,
+    hora: new Date().toLocaleTimeString(),
+    fecha: new Date().toLocaleDateString()
+  })
+})
+.then(res => res.text())
+.then(respuesta => {
 
-     document.body.classList.remove("verde");
-     document.body.classList.add("rojo");
+  if(respuesta.includes("ERROR")){
+    document.body.classList.remove("verde");
+    document.body.classList.add("rojo");
+    mensaje.innerText = "❌ RUT NO REGISTRADO";
+    beep(200, 300, 0.4);
+  } else {
+    document.body.classList.remove("rojo");
+    document.body.classList.add("verde");
+    mensaje.innerText = "✔ REGISTRADO";
+    beep(800, 150, 0.3);
+  }
 
-     mensaje.innerText = "❌ RUT NO REGISTRADO";
+})
+.catch(() => {
+  mensaje.innerText = "⚠ ERROR DE CONEXIÓN";
+});
 
-     beep(200, 300, 0.4); // sonido grave error
+// 🔄 RESET VISUAL
+setTimeout(()=>{
+  bloqueado = false;
+  mensaje.innerText = "Esperando escaneo...";
+  document.body.classList.remove("verde","rojo");
+},2000);
 
-     if(navigator.vibrate) navigator.vibrate([200,100,200]);
-
-   } else {
-
-     document.body.classList.remove("rojo");
-     document.body.classList.add("verde");
-
-     mensaje.innerText = "✔ REGISTRADO";
-
-     beep(800, 150, 0.3); // sonido correcto
-
-     if(navigator.vibrate) navigator.vibrate(200);
-
-   }
-
- })
- .catch(() => {
-   mensaje.innerText = "⚠ ERROR DE CONEXIÓN";
- });
-
- setTimeout(()=>{
-   bloqueado = false;
-   mensaje.innerText = "Esperando escaneo...";
-   document.body.classList.remove("verde","rojo");
- },2000);
 }
+
+// 🔄 LIBERA QR SI SIGUE EN PANTALLA
+setInterval(()=>{
+  ultimoQR = "";
+}, 3000);
 
 // 📷 CAMARA
 const qr = new Html5Qrcode("reader");
 
 qr.start(
   {facingMode:"environment"},
-  {fps:6,qrbox:250},
+  {
+    fps:6, // 🔥 más rápido y estable
+    qrbox:250
+  },
   onScanSuccess
 );
 
